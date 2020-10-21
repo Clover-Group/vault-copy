@@ -1,10 +1,12 @@
 package main
 
 import (
-	//"encoding/json"
+    "strings"
 	"fmt"
 	"github.com/hashicorp/vault/api"
 	"gopkg.in/yaml.v2"
+    "github.com/tidwall/sjson"
+    pureJson "encoding/json"
 	"regexp"
 )
 
@@ -30,20 +32,39 @@ func recursiveList(client *api.Client, path string) ([]string, error) {
 	return paths, nil
 }
 
-func editData(data interface{}, input string, output string, passwordLength int) (map[string]interface{}, error) {
+func editData(data interface{}, input string, output string, passwordLength int) (string, error) {
 	byaml, _ := yaml.Marshal(data)
 	var tree yaml.MapSlice
 	if err := yaml.Unmarshal(byaml, &tree); err != nil {
-		return nil, err
+		return "", err
 	}
 	lines := map[string]interface{}{}
-	if err := render(lines, tree, ""); err != nil {
-		return nil, err
+	if err := plain(lines, tree, ""); err != nil {
+		return "", err
 	}
-	return lines, nil
+	pat := regexp.MustCompile("^(.*?)" + input + "(.*)$")
+	repl := "${1}" + output + "${2}"
+    json:=""
+    var err error
+    for k, v := range lines {
+        if strings.Contains(k, "password") {
+            lines[k]=randomString(passwordLength)
+        }
+        if v1, ok:=v.(string); ok{
+            if strings.Contains(v1, input) {
+		        out := string(pat.ReplaceAll([]byte(v1), []byte(repl)))
+                lines[k]=out
+            }
+        }
+        json, err = sjson.Set(json, k, v)
+        if err!=nil {
+            return "", err
+        }
+    }
+	return json, nil
 }
 
-func render(lines map[string]interface{}, tree yaml.MapSlice, prefix string) error {
+func plain(lines map[string]interface{}, tree yaml.MapSlice, prefix string) error {
 	for _, branch := range tree {
 		key, ok := branch.Key.(string)
 		if !ok {
@@ -61,7 +82,7 @@ func render(lines map[string]interface{}, tree yaml.MapSlice, prefix string) err
 			return fmt.Errorf("unsupported value type: %T", branch.Value)
 		case yaml.MapSlice:
 			// recurse
-			if err := render(lines, x, newPrefix); err != nil {
+			if err := plain(lines, x, newPrefix); err != nil {
 				return err
 			}
 			continue
@@ -99,9 +120,11 @@ func vaultCopy(client *api.Client, input string, output string, regExp string, p
 		outPath := string(pat.ReplaceAll([]byte(path), []byte(repl)))
 		fmt.Println(outPath)
 		fmt.Println(editedData)
-		/*_, err := client.Logical.Write(outPath, editedData)
+        var b map[string]interface{}
+        pureJson.Unmarshal([]byte(editedData), &b)
+		_, err = client.Logical().Write("kv/data/"+outPath, b)
 		if err != nil {
 			panic(err)
-		}*/
+		}
 	}
 }

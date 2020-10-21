@@ -11,6 +11,7 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
+	github.com/tidwall/sjson v1.1.2
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897 // indirect
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
