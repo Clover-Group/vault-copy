@@ -2,11 +2,11 @@ package main
 
 import (
     "strings"
+    pureJson "encoding/json"
 	"fmt"
 	"github.com/hashicorp/vault/api"
 	"gopkg.in/yaml.v2"
     "github.com/tidwall/sjson"
-    pureJson "encoding/json"
 	"regexp"
 )
 
@@ -56,7 +56,7 @@ func editData(data interface{}, input string, output string, passwordLength int)
                 lines[k]=out
             }
         }
-        json, err = sjson.Set(json, k, v)
+        json, err = sjson.Set(json, k, lines[k])
         if err!=nil {
             return "", err
         }
@@ -115,13 +115,10 @@ func vaultCopy(client *api.Client, input string, output string, regExp string, p
 		if err != nil {
 			panic(err)
 		}
-
-		//b, _ := json.MarshalIndent(editedData, "", "  ")
 		outPath := string(pat.ReplaceAll([]byte(path), []byte(repl)))
-		fmt.Println(outPath)
-		fmt.Println(editedData)
-        var b map[string]interface{}
-        pureJson.Unmarshal([]byte(editedData), &b)
+        var b1 map[string]interface{}
+        pureJson.Unmarshal([]byte(editedData), &b1)
+        b:=map[string]interface{}{"data": b1}
 		_, err = client.Logical().Write("kv/data/"+outPath, b)
 		if err != nil {
 			panic(err)
