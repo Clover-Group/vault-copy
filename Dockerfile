@@ -1,4 +1,4 @@
-FROM golang:1.13 AS builder
+FROM golang:1.15 AS builder
 WORKDIR $GOPATH/src/github.com/clovergrp/vault-copy
 COPY go.mod go.sum ./
 ENV GO111MODULE=on \
