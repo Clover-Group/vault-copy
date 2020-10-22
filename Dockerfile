@@ -8,6 +8,7 @@ ENV GO111MODULE=on \
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install -ldflags="-s -w" -v ./...
+RUN strip --strip-unneeded /go/bin/vault-copy
 
 FROM scratch
 LABEL maintainer="Igor Diakonov <aidos.tanatos@gmail.com>"
