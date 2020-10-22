@@ -15,13 +15,19 @@ Options:
   -t string
     	Path to file with token (default "./token")
 ```
-# How to build
+# How to install
 ```
-$ docker build -t clovergrp/vault-copy .
+wget https://github.com/Clover-Group/vault-copy/releases/download/1.0.0/vault-copy_1.0.0_linux_amd64
+chmod +x vault-copy_1.0.0_linux_amd64
+sudo mv vault-copy_1.0.0_linux_amd64 /usr/local/bin/vault-copy
 ```
 Or you can just pull image from docker hub:
 ```
 docker pull clovergrp/vault-copy
+```
+# How to build
+```
+$ docker build -t clovergrp/vault-copy .
 ```
 # How to run
 ```
