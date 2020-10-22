@@ -1,15 +1,17 @@
 package main
 
 import (
-    "strings"
-    pureJson "encoding/json"
+	pureJson "encoding/json"
 	"fmt"
 	"github.com/hashicorp/vault/api"
+	"github.com/rwtodd/Go.Sed/sed"
+	"github.com/tidwall/sjson"
 	"gopkg.in/yaml.v2"
-    "github.com/tidwall/sjson"
 	"regexp"
+	"strings"
 )
 
+// Retrieves all keys from path in plain format
 func recursiveList(client *api.Client, path string) ([]string, error) {
 	paths := []string{}
 	subpaths, err := client.Logical().List("kv/metadata/" + path)
@@ -32,7 +34,8 @@ func recursiveList(client *api.Client, path string) ([]string, error) {
 	return paths, nil
 }
 
-func editData(data interface{}, input string, output string, passwordLength int) (string, error) {
+// Substitues output in place of input and replaces passwords and secretKeys with random strings
+func editData(data interface{}, input, output, regExp string, passwordLength int) (string, error) {
 	byaml, _ := yaml.Marshal(data)
 	var tree yaml.MapSlice
 	if err := yaml.Unmarshal(byaml, &tree); err != nil {
@@ -44,26 +47,49 @@ func editData(data interface{}, input string, output string, passwordLength int)
 	}
 	pat := regexp.MustCompile("^(.*?)" + input + "(.*)$")
 	repl := "${1}" + output + "${2}"
-    json:=""
-    var err error
-    for k, v := range lines {
-        if strings.Contains(k, "password") {
-            lines[k]=randomString(passwordLength)
-        }
-        if v1, ok:=v.(string); ok{
-            if strings.Contains(v1, input) {
-		        out := string(pat.ReplaceAll([]byte(v1), []byte(repl)))
-                lines[k]=out
-            }
-        }
-        json, err = sjson.Set(json, k, lines[k])
-        if err!=nil {
-            return "", err
-        }
-    }
+	json := ""
+	var err error
+	var engine *sed.Engine
+	if regExp != "" {
+		engine, err = sed.New(strings.NewReader(regExp))
+		if err != nil {
+			return "", err
+		}
+	}
+	for k, v := range lines {
+		if strings.Contains(k, "password") {
+			lines[k] = randomString(passwordLength)
+		} else if strings.Contains(k, "secretKey") {
+			lines[k] = randomStringWithCharset(50, charset+extraSymbols)
+		}
+		if v1, ok := v.(string); ok {
+			out := ""
+			if strings.Contains(v1, input) {
+				out = string(pat.ReplaceAll([]byte(v1), []byte(repl)))
+			} else {
+				out = v1
+			}
+			if regExp != "" {
+				outString, err := engine.RunString(out)
+				if err != nil {
+					return "", err
+				}
+				lines[k] = outString
+			} else {
+				lines[k] = out
+			}
+		}
+		json, err = sjson.Set(json, k, lines[k])
+		if err != nil {
+			return "", err
+		}
+	}
 	return json, nil
 }
 
+// Represents interface in plane format
+// Example:
+// {"foo":{"bar":"baz"}} would be {"foo.bar":"baz"}
 func plain(lines map[string]interface{}, tree yaml.MapSlice, prefix string) error {
 	for _, branch := range tree {
 		key, ok := branch.Key.(string)
@@ -111,14 +137,14 @@ func vaultCopy(client *api.Client, input string, output string, regExp string, p
 		if err != nil {
 			panic(err)
 		}
-		editedData, err := editData(data.Data["data"], input, output, passwordLength)
+		editedData, err := editData(data.Data["data"], input, output, regExp, passwordLength)
 		if err != nil {
 			panic(err)
 		}
 		outPath := string(pat.ReplaceAll([]byte(path), []byte(repl)))
-        var b1 map[string]interface{}
-        pureJson.Unmarshal([]byte(editedData), &b1)
-        b:=map[string]interface{}{"data": b1}
+		var b1 map[string]interface{}
+		pureJson.Unmarshal([]byte(editedData), &b1)
+		b := map[string]interface{}{"data": b1}
 		_, err = client.Logical().Write("kv/data/"+outPath, b)
 		if err != nil {
 			panic(err)
